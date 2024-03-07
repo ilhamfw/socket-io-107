@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Socket.IO Test Page</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/socket.io-1.4.0.js"></script>
+</head>
+
+<body>
+    <div class="container mt-3">
+        <h1 class="text-center">Socket.IO Test Page</h1>
+        <div id="status" class="alert alert-primary" role="alert">
+            Connecting to server...
+        </div>
+        <div id="user-list" class="alert alert-secondary" role="alert">
+            Connected users: None
+        </div>
+        <ul id="chat" class="list-group"></ul>
+        <form id="chat-form" class="form-inline mb-3">
+            <input type="text" id="chat-message" class="form-control mr-sm-2" placeholder="Type a message...">
+            <button type="submit" class="btn btn-primary">Send Message</button>
+        </form>
+        <button id="bye-btn" class="btn btn-warning">Say Bye</button>
+    </div>
+
+    <!-- jQuery and Bootstrap Bundle (includes Popper) -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function () {
+            var socket = io('http://localhost:8000/');
+            var connectedUsers = {};
+
+            function updateUserList() {
+                // Update the connected users display
+                var userListElement = document.getElementById('user-list');
+                var users = Object.keys(connectedUsers).join(', ');
+                userListElement.textContent = 'Connected users: ' + (users || 'None');
+            }
+
+            function appendMessage(message, sender) {
+                var chat = document.getElementById('chat');
+                var messageElement = document.createElement('li');
+                messageElement.classList.add('list-group-item');
+                messageElement.textContent = sender + ": " + message;
+                chat.appendChild(messageElement);
+                chat.scrollTop = chat.scrollHeight;
+            }
+
+            socket.on('connect', function () {
+                appendMessage('Connected to the chat server.', 'System');
+                document.getElementById('status').textContent = 'Connected to the chat server.';
+                console.log('Connected to the chat server. Your user ID is', socket.id);
+                connectedUsers[socket.id] = 'You';
+                updateUserList();
+            });
+
+            socket.on('disconnect', function () {
+                appendMessage('Disconnected from the chat server.', 'System');
+                document.getElementById('status').textContent = 'Disconnected from the chat server.';
+                document.getElementById('status').className = 'alert alert-warning';
+                delete connectedUsers[socket.id];
+                updateUserList();
+            });
+
+            // socket.on('msg', function (message) {
+            //     var senderId = message.sender === socket.id ? 'You' : 'User ' + message.sender;
+            //     appendMessage(message.content, senderId);
+            // });
+
+            socket.on('msg', function (message) {
+                appendMessage(message.Content, message.Sender === socket.id ? 'You' : 'User ' + message.Sender);
+            });
+
+
+            socket.on('user_connected', function (userId) {
+                if (userId !== socket.id) { // Avoid adding yourself twice
+                    connectedUsers[userId] = 'User ' + userId;
+                    appendMessage('User ' + userId + ' has connected.', 'System');
+                    updateUserList();
+                }
+            });
+
+            socket.on('user_disconnected', function (userId) {
+                if (userId in connectedUsers) {
+                    appendMessage('User ' + userId + ' has disconnected.', 'System');
+                    delete connectedUsers[userId];
+                    updateUserList();
+                }
+            });
+
+            document.getElementById('chat-form').addEventListener('submit', function (e) {
+                e.preventDefault();
+                var messageInput = document.getElementById('chat-message');
+                var message = messageInput.value.trim();
+                if (message) {
+                    // Emit the 'msg' event to the server with the message content and sender ID
+                    socket.emit('msg', { sender: socket.id, content: message });
+                    // Append the message right away to the chat for the user who sent it
+                    appendMessage(message, 'You');
+                    // Clear the input field after sending the message
+                    messageInput.value = '';
+                }
+            });
+
+
+            document.getElementById('bye-btn').addEventListener('click', function () {
+                socket.emit('bye');
+                appendMessage('You said goodbye!', 'System');
+            });
+
+        });
+    </script>
+</body>
+
+</html>
